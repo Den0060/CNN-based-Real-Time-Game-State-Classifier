@@ -1,0 +1,19 @@
+Entwicklungsverlauf – Fishbot
+
+Zuerst ging es um den Grundaufbau: Bildschirm scannen, den Bereich mit Balken und Fisch erkennen, und je nach Bewegungsrichtung die Maus steuern (halten bei rechts, loslassen bei links). Dafür haben wir uns für ein kleines selbst trainiertes CNN (PyTorch/torchvision) entschieden statt reinem Template-Matching, unter anderem weil der Fisch farblich wechselt (weiß/blau) und das für ein Portfolio-Projekt auch besser aussieht.
+
+Der Aufbau bestand aus mehreren Skripten: pick_region (mss + OpenCV) zum Auswählen des Bildschirmbereichs, record_data zum Sammeln von Trainings-Screenshots während des Spielens, manuelles Einsortieren der Bilder in Klassen-Ordner, train fürs Modelltraining und bot als Live-Skript, das per mss den Bildschirm scannt, mit dem Modell klassifiziert und über pyautogui die Maus steuert.
+
+Ursprünglich gab es vier Klassen: fisch_links, fisch_rechts, balken_weg und dialog_neuer_fisch. Ich habe gemerkt, dass dialog_neuer_fisch unnötig ist, weil beim Verschwinden des Balkens sowieso schon per Klick neu geangelt wird – beide Fälle laufen auf dieselbe Aktion hinaus. Also auf drei Klassen reduziert.
+
+Beim Programmieren gab es noch zwei klassische Stolpersteine: Erst haben die Pfade zu data/ nicht funktioniert, weil sie relativ zum Arbeitsverzeichnis statt zum Projektordner berechnet wurden. Gefixt, indem die Pfade jetzt immer relativ zum Skript-Speicherort berechnet werden. Danach gab es einen Trainingsfehler, weil im data-Ordner noch der _unsorted-Ordner lag und automatisch als vierte, falsche Klasse erkannt wurde. Nach dem Aufräumen lief das Training sauber durch, mit sehr guter Genauigkeit.
+
+Beim ersten Live-Test kam das eigentliche Kernproblem: Sobald balken_weg erkannt wurde, hat der Bot bei jedem Frame erneut geklickt, statt nur einmal. Dafür already_clicked als Flag eingeführt, das sich merkt, ob für den aktuellen Moment schon geklickt wurde.
+
+Das brachte ein neues Problem: Danach hat der Bot beim nächsten Fisch gar nicht mehr geklickt, weil already_clicked nie zurückgesetzt wurde. Gelöst, indem already_clicked = False auch in fisch_links und fisch_rechts gesetzt wird, damit das Flag bei jedem neuen Fisch zurückgesetzt wird und der Bot beim nächsten „Balken weg" wieder klicken kann.
+
+Modell funktioniert halbwegs gut, allerdings immer noch fehlerhaft. Beim genaueren Hinterfragen ist mir klar geworden, warum das Modell grundsätzlich fehleranfällig war: Das Fisch-Icon dreht sich nicht und sieht bei Links- und Rechtsbewegung optisch identisch aus. Die Bewegungsrichtung war also aus einem einzelnen Screenshot gar nicht zuverlässig erkennbar – das Modell hatte vermutlich ein Schein-Muster gelernt (z. B. die Position im Bild), das im Live-Betrieb nicht robust genug war.
+
+Neuer Ansatz: wenn der Fisch rechts vom Balken ist soll das Modell nach rechts und wenn er links davon ist dann links, wenn der Fisch auf dem Balken liegt ist alles gut, er soll dann versuchen die Position zu halten. Optimal wäre es natürlich, wenn der Agent immer versucht, den Balken mittig hinter den Fisch oder auf den Fisch zu bringen. Dafür wurden die Klassen komplett umbenannt und neu strukturiert (fisch_links_von_balken, fisch_rechts_von_balken, fisch_auf_balken, balken_weg), die komplette Bot-Logik entsprechend angepasst, und alle Trainingsdaten mussten neu gesammelt und nach der neuen Logik (Position statt Bewegung) einsortiert werden.
+
+Nun läuft das und auch schon viel besser.
